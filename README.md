@@ -4,6 +4,7 @@
 ## Features
 - HTTP GET and POST requests
 - Automatically start Modem if turned off
+- Receive GNSS Location
 
 ## Overview
 
@@ -25,5 +26,16 @@ if __name__ == "__main__":
         time.sleep(0.5)
 ```
 
-## Planned Enhancements
-- Receive GNSS Location
+### Get Location
+```python
+from ws_sim868.modemUnit import ModemUnit
+import time
+
+if __name__ == "__main__":
+    m = ModemUnit()
+    m.gnss_start()
+
+    while True:
+        time.sleep(3)
+        print(m.get_gnss_loc())
+```
