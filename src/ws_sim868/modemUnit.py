@@ -145,12 +145,18 @@ class ModemUnit:
         self.__write_lock = False
         self.__command_queue.clear()
 
+        if self.__http_in_request:
+            self.__http_in_request = False
+            self.__http_current_uuid = ""
+            self.__http_queue.append(self.__http_current_request)
+            self.__http_current_request = None
+
         # Disconnect and Reconnect Serial
         self.__ser.close()
         time.sleep(5)
         self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
 
-        time.sleep(10)
+        time.sleep(5)
         self.__reinit()
 
     def __main_thread(self):
