@@ -306,9 +306,18 @@ class ModemUnit:
         self.modem_execute("AT+CGNSURC=" + str(rate))
 
     def gnss_stop(self):
+        """
+        Stop GNSS
+        :return:
+        """
         self.__gnss_active = False
         self.__gnss_rate = 0
         self.modem_execute("AT+CGNSPWR=0")
 
     def get_gnss_loc(self):
+        """
+        Get current GNSS data:
+        {'gnss_run_status', 'fix_status', 'time', 'lat', 'lon', 'alt', 'speed', 'course','sat', 'sat_used'}
+        :return: Dictionary containing current GNSS data
+        """
         return self.__gnss_loc
