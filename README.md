@@ -5,6 +5,11 @@
 - HTTP GET and POST requests
 - Automatically start Modem if turned off
 
+## Instalation
+```
+pip install ws-sim868
+```
+
 ## Overview
 
 ## Examples:
