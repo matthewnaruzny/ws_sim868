@@ -31,7 +31,9 @@ class ModemUnit:
 
         # GPS
         self.__gnss_active = False
-        self.__gnss_loc = None
+        self.__gnss_pwr = False
+        self.__gnss_rate = 0 # 0 - Off
+        self.__gnss_loc = {'gnss_run_status': 0, 'fix_status': 0}
 
         # Network
         self.__network_active = False
@@ -64,14 +66,18 @@ class ModemUnit:
                     self.__write_lock = False
                 elif "+CGNSPWR" in newline and "AT" not in newline:  # GNSS Power Notification
                     pwr = newline.split(':')[1]
-                    self.__gnss_active = ('1' in pwr)
+                    self.__gnss_pwr = ('1' in pwr)
                     self.__write_lock = False
-                    if self.__gnss_active:
+                    if self.__gnss_pwr:
                         logging.info("Modem: GNSS Active")
                     else:
                         logging.info("Modem: GNSS Inactive")
                 elif newline.startswith("+UGNSINF"):  # GPS Update
                     data = newline.split(':')[1][1:].split(',')
+                    new_data = {'gnss_run_status': data[0], 'fix_status': data[1],
+                                'time': data[2], 'lat': data[3], 'lon': data[4], 'alt': data[5], 'speed': data[6],
+                                'course': data[7],'sat': data[14], 'sat_used': data[15]}
+                    self.__gnss_loc = new_data
                 elif newline.startswith("+HTTPACTION"):  # HTTP Response
                     self.__write_lock = False
                     reply = newline.split()[1].split(',')
@@ -122,9 +128,13 @@ class ModemUnit:
                 self.modem_execute("AT")
 
     def __reinit(self):
-        if self.__network_active and self.__apn_config is not None:
+        if self.__network_active and self.__apn_config is not None: # Network
             self.__network_active = False
             self.network_start()
+
+        if self.__gnss_active and self.__gnss_rate != 0: # GNSS
+            self.gnss_start(rate=self.__gnss_rate)
+
 
     def power_toggle(self):
         logging.critical("Sys: Toggling Modem Power")
@@ -290,8 +300,24 @@ class ModemUnit:
         Start GNSS
         :param rate: Refresh rate from modem. (Hz, Max 1Hz)
         """
+        self.__gnss_active = True
+        self.__gnss_rate = rate
         self.modem_execute("AT+CGNSPWR=1")
         self.modem_execute("AT+CGNSURC=" + str(rate))
 
     def gnss_stop(self):
+        """
+        Stop GNSS
+        :return:
+        """
+        self.__gnss_active = False
+        self.__gnss_rate = 0
         self.modem_execute("AT+CGNSPWR=0")
+
+    def get_gnss_loc(self):
+        """
+        Get current GNSS data:
+        {'gnss_run_status', 'fix_status', 'time', 'lat', 'lon', 'alt', 'speed', 'course','sat', 'sat_used'}
+        :return: Dictionary containing current GNSS data
+        """
+        return self.__gnss_loc
