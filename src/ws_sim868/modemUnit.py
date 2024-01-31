@@ -29,6 +29,8 @@ class ModemUnit:
 
         self.__last_health = 0
 
+        self.__imei = None
+
         # GPS
         self.__gnss_active = False
         self.__gnss_pwr = False
@@ -46,6 +48,9 @@ class ModemUnit:
         self.__http_current_uuid = ""
         self.__http_current_request = None
         self.__http_request_cache = {}
+
+        # Init Commands
+        self.modem_execute("AT+GSN")
 
         # Worker Thread
         self.__mthread = None
@@ -104,6 +109,10 @@ class ModemUnit:
                             self.__http_result[self.__http_current_uuid] = http_result
                             return
                         time.sleep(0.1)
+                elif self.__command_last == 'AT+GSN' and newline != 'AT+GSN' and self.__imei is None:
+                    self.__imei = newline
+                    self.__write_lock = False
+                    return
 
     def __modem_write(self, cmd):
         if not self.__write_lock:
@@ -134,6 +143,9 @@ class ModemUnit:
 
         if self.__gnss_active and self.__gnss_rate != 0: # GNSS
             self.gnss_start(rate=self.__gnss_rate)
+
+        if self.__imei is None:
+            self.modem_execute("AT+GSN")
 
 
     def power_toggle(self):
@@ -321,3 +333,14 @@ class ModemUnit:
         :return: Dictionary containing current GNSS data
         """
         return self.__gnss_loc
+
+    def get_imei(self):
+        if self.__imei is None:
+            self.__refresh_imei()
+            while self.__imei is None:
+                time.sleep(1)
+        return self.__imei
+
+    def __refresh_imei(self):
+        self.__imei = None
+        self.modem_execute("AT+GSN")
