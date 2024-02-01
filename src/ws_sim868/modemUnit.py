@@ -11,7 +11,6 @@ import RPi.GPIO as GPIO
 
 class GPSData:
     def __init__(self, cgnsinf=None):
-        print(cgnsinf)
         self.run_status = 0
         self.fix_status = 0
         self.date_time = ""
