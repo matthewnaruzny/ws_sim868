@@ -5,8 +5,74 @@ import time
 import serial
 import uuid
 import logging
+import traceback
 
 import RPi.GPIO as GPIO
+
+class GPSData:
+    def __init__(self, cgnsinf=None):
+        print(cgnsinf)
+        self.run_status = 0
+        self.fix_status = 0
+        self.date_time = ""
+        self.latitude = 0
+        self.longitude = 0
+        self.altitude = 0
+        self.speed = 0
+        self.course = 0
+        self.fix_mode = 0
+        self.hdop = 0
+        self.pdop = 0
+        self.vdop = 0
+        self.satellite_visible = 0
+        self.satellite_used = 0
+        self.glonass_visible = 0
+        self.cn0_max = 0
+        self.hpa = 0
+        self.vpa = 0
+
+        if cgnsinf is not None:
+            try:
+                data = cgnsinf.split(',')
+                self.run_status = int(data[0])
+                self.fix_status = int(data[1])
+                if data[2] != '':
+                    self.date_time = data[2]
+                if data[3] != '':
+                    self.latitude = float(data[3])
+                if data[4] != '':
+                    self.longitude = float(data[4])
+                if data[5] != '':
+                    self.altitude = float(data[5])
+                if data[6] != '':
+                    self.speed = float(data[6])
+                if data[7] != '':
+                    self.course = float(data[7])
+                if data[8] != '':
+                    self.fix_mode = int(data[8])
+                if data[10] != '':
+                    self.hdop = float(data[10])
+                if data[11] != '':
+                    self.pdop = float(data[11])
+                if data[12] != '':
+                    self.vdop = float(data[12])
+                if data[14] != '':
+                    self.satellite_visible = int(data[14])
+                if data[15] != '':
+                    self.satellite_used = int(data[15])
+                if data[16] != '':
+                    self.glonass_visible = int(data[16])
+                if data[17] != '':
+                    self.cn0_max = float(data[17])
+                if data[18] != '':
+                    self.hpa = float(data[18])
+                if data[19] != '':
+                    self.vpa = float(data[19])
+            except (IndexError, ValueError):
+                logging.error("Malformed GPS Data")
+                logging.error(traceback.format_exc())
+
+
 
 
 class ModemUnit:
@@ -35,7 +101,7 @@ class ModemUnit:
         self.__gnss_active = False
         self.__gnss_pwr = False
         self.__gnss_rate = 0 # 0 - Off
-        self.__gnss_loc = {'gnss_run_status': 0, 'fix_status': 0}
+        self.__gnss_loc = GPSData()
 
         # Network
         self.__network_active = False
@@ -78,11 +144,8 @@ class ModemUnit:
                     else:
                         logging.info("Modem: GNSS Inactive")
                 elif newline.startswith("+UGNSINF"):  # GPS Update
-                    data = newline.split(':')[1][1:].split(',')
-                    new_data = {'gnss_run_status': data[0], 'fix_status': data[1],
-                                'time': data[2], 'lat': data[3], 'lon': data[4], 'alt': data[5], 'speed': data[6],
-                                'course': data[7],'sat': data[14], 'sat_used': data[15]}
-                    self.__gnss_loc = new_data
+                    data = newline.split(':')[1][1:]
+                    self.__gnss_loc = GPSData(data)
                 elif newline.startswith("+HTTPACTION"):  # HTTP Response
                     self.__write_lock = False
                     reply = newline.split()[1].split(',')
