@@ -37,7 +37,7 @@ class GPSData:
                 self.run_status = int(data[0])
                 self.fix_status = int(data[1])
                 if data[2] != '':
-                    self.date_time = data[2]
+                    self.timestamp = round(float(data[2]))
                 if data[3] != '':
                     self.latitude = float(data[3])
                 if data[4] != '':
