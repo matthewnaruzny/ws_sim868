@@ -188,7 +188,11 @@ class ModemUnit:
             return True
         return False
 
-    def modem_execute(self, cmd):
+    def modem_execute(self, cmd) -> None:
+        """
+        Add command to queue to write to modem.
+        :param cmd: AT (or other) command.
+        """
         self.__command_queue.append(cmd)
 
     def __health_check(self):
@@ -210,7 +214,10 @@ class ModemUnit:
             self.modem_execute("AT+GSN")
 
 
-    def power_toggle(self):
+    def power_toggle(self) -> None:
+        """
+        Toggle power of Modem
+        """
         logging.critical("Sys: Toggling Modem Power")
         self.__last_health = time.time()
         self.__command_last_time = time.time()
@@ -279,7 +286,13 @@ class ModemUnit:
         self.__bearer_setval(1, "USER", apn_config['username'])  # Set Username
         self.__bearer_setval(1, "PWD", apn_config['password'])  # Set Password
 
-    def apn_config(self, apn, username, password):
+    def apn_config(self, apn, username, password) -> None:
+        """
+        Set modem APN, Username, and Password
+        :param apn: Network APN
+        :param username: Network Username
+        :param password: Network Password
+        """
         self.__apn_config = {'apn': apn, 'username': username, 'password': password}
 
     def __bearer_open(self):
@@ -296,12 +309,18 @@ class ModemUnit:
         self.__bearer_config(self.__apn_config)
         self.__bearer_open()
 
-    def network_start(self):
+    def network_start(self) -> None:
+        """
+        Start Network
+        """
         self.__network_init()
         self.__network_active = True
 
 
-    def network_stop(self):
+    def network_stop(self) -> None:
+        """
+        Stop Network
+        """
         self.__network_active = False
         self.modem_execute("AT+SAPBR=0,1")
 
@@ -352,7 +371,7 @@ class ModemUnit:
                     return res
             time.sleep(0.1)
 
-    def http_get(self, url):
+    def http_get(self, url) -> dict:
         """
         HTTP GET request
         :param url: URL to request
@@ -360,7 +379,7 @@ class ModemUnit:
         """
         return self.__http_request(0, url)
 
-    def http_post(self, url):
+    def http_post(self, url) -> dict:
         """
         HTTP POST request
         :param url: URL to request
@@ -369,7 +388,7 @@ class ModemUnit:
         return self.__http_request(1, url)
 
 
-    def gnss_start(self, rate=1):
+    def gnss_start(self, rate=1) -> None:
         """
         Start GNSS
         :param rate: Refresh rate from modem. (Hz, Max 1Hz)
@@ -379,24 +398,25 @@ class ModemUnit:
         self.modem_execute("AT+CGNSPWR=1")
         self.modem_execute("AT+CGNSURC=" + str(rate))
 
-    def gnss_stop(self):
+    def gnss_stop(self) -> None:
         """
         Stop GNSS
-        :return:
         """
         self.__gnss_active = False
         self.__gnss_rate = 0
         self.modem_execute("AT+CGNSPWR=0")
 
-    def get_gnss_loc(self):
+    def get_gnss_loc(self) -> GPSData:
         """
-        Get current GNSS data:
-        {'gnss_run_status', 'fix_status', 'time', 'lat', 'lon', 'alt', 'speed', 'course','sat', 'sat_used'}
-        :return: Dictionary containing current GNSS data
+        Get GPSData from modem.
+        :return: GPSData object containing gps data from modem.
         """
         return self.__gnss_loc
 
-    def get_imei(self):
+    def get_imei(self) -> str:
+        """
+        :return: Modem's IMEI
+        """
         if self.__imei is None:
             self.__refresh_imei()
             while self.__imei is None:
