@@ -13,7 +13,7 @@ class GPSData:
     def __init__(self, cgnsinf=None):
         self.run_status = 0
         self.fix_status = 0
-        self.date_time = ""
+        self.timestamp = ""
         self.latitude = 0
         self.longitude = 0
         self.altitude = 0
