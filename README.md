@@ -1,6 +1,10 @@
 # ws_sim868
 ## Interface module for the Waveshare GSM/GPRS/GNSS Pi Hat
 
+![PyPI - License](https://img.shields.io/pypi/l/ws-sim868)
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/matthewnaruzny/ws_sim868/python-publish.yml)
+![PyPI - Version](https://img.shields.io/pypi/v/ws_sim868)
+
 ## Features
 - HTTP GET and POST requests
 - Automatically start Modem if turned off
