@@ -12,6 +12,7 @@ import RPi.GPIO as GPIO
 
 class GPSData:
     def __init__(self, cgnsinf=None):
+        self.cgnsinf = ""
         self.run_status = 0
         self.fix_status = 0
         self.timestamp = ""
@@ -33,6 +34,7 @@ class GPSData:
 
         if cgnsinf is not None:
             try:
+                self.cgnsinf = cgnsinf
                 data = cgnsinf.split(',')
                 self.run_status = int(data[0])
                 self.fix_status = int(data[1])
@@ -71,6 +73,8 @@ class GPSData:
             except (IndexError, ValueError):
                 logging.error("Malformed GPS Data")
                 logging.error(traceback.format_exc())
+    def __str__(self):
+        return self.cgnsinf
 
 
 
