@@ -6,11 +6,13 @@ import serial
 import uuid
 import logging
 import traceback
+import queue
 
 import RPi.GPIO as GPIO
 
 class GPSData:
     def __init__(self, cgnsinf=None):
+        self.cgnsinf = ""
         self.run_status = 0
         self.fix_status = 0
         self.timestamp = ""
@@ -32,6 +34,7 @@ class GPSData:
 
         if cgnsinf is not None:
             try:
+                self.cgnsinf = cgnsinf
                 data = cgnsinf.split(',')
                 self.run_status = int(data[0])
                 self.fix_status = int(data[1])
@@ -70,6 +73,8 @@ class GPSData:
             except (IndexError, ValueError):
                 logging.error("Malformed GPS Data")
                 logging.error(traceback.format_exc())
+    def __str__(self):
+        return self.cgnsinf
 
 
 
@@ -88,7 +93,7 @@ class ModemUnit:
         # Serial
         self.__ser = serial.Serial(port, baudrate=baudrate)
         self.__write_lock = False
-        self.__command_queue = []
+        self.__command_queue = queue.Queue()
         self.__command_last = ""
         self.__command_last_time = 0
 
@@ -107,7 +112,7 @@ class ModemUnit:
         self.__apn_config = None
 
         # HTTP
-        self.__http_queue = []
+        self.__http_queue = queue.Queue()
         self.__http_result = {}
         self.__http_in_request = False
         self.__http_current_uuid = ""
@@ -193,13 +198,13 @@ class ModemUnit:
         Add command to queue to write to modem.
         :param cmd: AT (or other) command.
         """
-        self.__command_queue.append(cmd)
+        self.__command_queue.put(cmd)
 
     def __health_check(self):
         if time.time() - self.__last_health > 30 and time.time() - self.__command_last_time > 30:
             if self.__write_lock:  # If waiting for reply and waiting over 30 seconds
                 self.power_toggle()
-            elif not self.__write_lock and len(self.__command_queue) == 0:
+            elif not self.__write_lock and not self.__command_queue.empty():
                 self.modem_execute("AT")
 
     def __reinit(self):
@@ -234,12 +239,13 @@ class ModemUnit:
 
         # Reset
         self.__write_lock = False
-        self.__command_queue.clear()
+        with self.__command_queue.mutex:
+            self.__command_queue.queue.clear()
 
         if self.__http_in_request:
             self.__http_in_request = False
             self.__http_current_uuid = ""
-            self.__http_queue.append(self.__http_current_request)
+            self.__http_queue.put(self.__http_current_request)
             self.__http_current_request = None
 
         # Disconnect and Reconnect Serial
@@ -258,12 +264,12 @@ class ModemUnit:
             self.__process_input()
 
             # If HTTP not in progress, execute next.
-            if not self.__http_in_request and len(self.__http_queue) > 0:
+            if not self.__http_in_request and not self.__http_queue.empty():
                 self.__http_execute_next()
 
             # Execute command if waiting
-            if len(self.__command_queue) > 0 and not self.__write_lock:
-                next_cmd = self.__command_queue.pop(0)
+            if not self.__command_queue.empty() and not self.__write_lock:
+                next_cmd = self.__command_queue.get()
                 self.__modem_write(next_cmd)
 
             time.sleep(0.1)
@@ -325,11 +331,11 @@ class ModemUnit:
         self.modem_execute("AT+SAPBR=0,1")
 
     def __http_execute_next(self):
-        if self.__http_in_request or len(self.__http_queue) == 0:  # Stop if request already in progress or if no requests
+        if self.__http_in_request or self.__http_queue.empty():  # Stop if request already in progress or if no requests
             return
 
         self.__http_in_request = True
-        req = self.__http_queue.pop(0)
+        req = self.__http_queue.get()
         self.__http_current_uuid = req['uuid']
         self.__http_current_request = req
         self.__http_request_cache[req['uuid']] = req
@@ -358,7 +364,7 @@ class ModemUnit:
             self.network_start()
         new_uuid = uuid.uuid4()
         self.__http_result[new_uuid] = None
-        self.__http_queue.append({'url': url, 'method': method, 'uuid': new_uuid})
+        self.__http_queue.put({'url': url, 'method': method, 'uuid': new_uuid})
         while True:  # Wait for Response
             if self.__http_result[new_uuid] is not None:
                 if (self.__http_result[new_uuid]['data_size'] != 0 and self.__http_result[new_uuid]['data'] is not None) or self.__http_result[new_uuid]['data_size'] == 0:
