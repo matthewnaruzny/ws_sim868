@@ -123,6 +123,7 @@ class ModemUnit:
         self.modem_execute("AT+GSN")
 
         # Worker Thread
+        self.__worker_working = True
         self.__mthread = None
         self.__start_worker()
 
@@ -239,6 +240,7 @@ class ModemUnit:
         """
         Close serial connection to Modem.
         """
+        self.__worker_working = False
         self.__write_lock = True
         self.__ser.close()
 
