@@ -218,6 +218,14 @@ class ModemUnit:
         if self.__imei is None:
             self.modem_execute("AT+GSN")
 
+    def close(self):
+        """
+        Close serial connection to Modem.
+        """
+        self.__write_lock = True
+        self.__ser.close()
+
+
 
     def power_toggle(self) -> None:
         """
