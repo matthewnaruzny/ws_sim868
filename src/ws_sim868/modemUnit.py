@@ -208,6 +208,23 @@ class ModemUnit:
                 self.modem_execute("AT")
 
     def __reinit(self):
+        self.__write_lock = False
+        with self.__command_queue.mutex: # Clear Command Queue
+            self.__command_queue.queue.clear()
+
+        if self.__http_in_request: # Re-queue in-progress HTTP request
+            self.__http_in_request = False
+            self.__http_current_uuid = ""
+            self.__http_queue.put(self.__http_current_request)
+            self.__http_current_request = None
+
+        # Disconnect and Reconnect Serial
+        self.__ser.close()
+        time.sleep(5)
+        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
+
+        time.sleep(5)
+
         if self.__network_active and self.__apn_config is not None: # Network
             self.__network_active = False
             self.network_start()
@@ -224,8 +241,6 @@ class ModemUnit:
         """
         self.__write_lock = True
         self.__ser.close()
-
-
 
     def power_toggle(self) -> None:
         """
@@ -244,22 +259,6 @@ class ModemUnit:
             GPIO.output(7, GPIO.HIGH)
             break
         GPIO.cleanup()
-
-        # Reset
-        self.__write_lock = False
-        with self.__command_queue.mutex:
-            self.__command_queue.queue.clear()
-
-        if self.__http_in_request:
-            self.__http_in_request = False
-            self.__http_current_uuid = ""
-            self.__http_queue.put(self.__http_current_request)
-            self.__http_current_request = None
-
-        # Disconnect and Reconnect Serial
-        self.__ser.close()
-        time.sleep(5)
-        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
 
         time.sleep(5)
         self.__reinit()
