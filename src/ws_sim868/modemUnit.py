@@ -87,6 +87,7 @@ class ModemUnit:
             logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
         # Serial Config
+        self.connect()
         self.__serial_port = port
         self.__serial_baudrate = baudrate
 
@@ -236,11 +237,14 @@ class ModemUnit:
         if self.__imei is None:
             self.modem_execute("AT+GSN")
 
-    def close(self):
+    def connect(self):
+        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
+        self.__write_lock = False
+
+    def disconnect(self):
         """
         Close serial connection to Modem.
         """
-        self.__worker_working = False
         self.__write_lock = True
         self.__ser.close()
 
