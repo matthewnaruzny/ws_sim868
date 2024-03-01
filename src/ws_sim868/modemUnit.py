@@ -87,9 +87,9 @@ class ModemUnit:
             logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
         # Serial Config
-        self.connect()
         self.__serial_port = port
         self.__serial_baudrate = baudrate
+        self.connect()
 
         # Serial
         self.__ser = serial.Serial(port, baudrate=baudrate)
