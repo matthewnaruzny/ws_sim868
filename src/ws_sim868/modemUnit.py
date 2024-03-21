@@ -80,7 +80,7 @@ class GPSData:
 
 
 class ModemUnit:
-    def __init__(self, port='/dev/ttyS0', baudrate=115200, log=True):
+    def __init__(self, port='/dev/ttyS0', baudrate=115200, log=True, http_reinit=3):
 
         # Logging
         if log:
@@ -119,6 +119,8 @@ class ModemUnit:
         self.__http_current_uuid = ""
         self.__http_current_request = None
         self.__http_request_cache = {}
+        self.__http_fail_count = 0
+        self.__http_fail_max = http_reinit
 
         # Init Commands
         self.modem_execute("AT+GSN")
@@ -373,8 +375,14 @@ class ModemUnit:
         :param url: URL to request.
         :return: Dict containing response code, data size, and data.
         """
-        if self.__network_active is False and self.__apn_config is not None:
+        if self.__network_active is False and self.__apn_config is not None: # Start if not active
             self.network_start()
+
+        if self.__http_fail_count >= self.__http_fail_max != 0: # Retry if too many fails
+            logging.warning("Too many failed attempts. Restarting Network.")
+            self.network_stop()
+            self.network_start()
+
         new_uuid = uuid.uuid4()
         self.__http_result[new_uuid] = None
         self.__http_queue.put({'url': url, 'method': method, 'uuid': new_uuid})
@@ -386,6 +394,10 @@ class ModemUnit:
                     # Clear Cache
                     self.__http_result.pop(new_uuid)
                     self.__http_request_cache.pop(new_uuid)
+
+                    # Check Result Code
+                    if res['http_code'] >= 600:
+                        self.__http_fail_count += 1
 
                     return res
             time.sleep(0.1)
