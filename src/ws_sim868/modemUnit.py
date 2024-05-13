@@ -114,11 +114,9 @@ class ModemUnit:
 
         # HTTP
         self.__http_queue = queue.Queue()
-        self.__http_result = {}
         self.__http_in_request = False
-        self.__http_current_uuid = ""
+        self.__http_current_rqueue = None
         self.__http_current_request = None
-        self.__http_request_cache = {}
         self.__http_fail_count = 0
         self.__http_fail_max = http_reinit
 
@@ -160,8 +158,9 @@ class ModemUnit:
                     cid = int(reply[0])
                     http_status = int(reply[1])
                     data_size = int(reply[2])
-                    self.__http_result[self.__http_current_uuid] = {'cid': cid, 'http_status': http_status,
-                                                                    'data_size': data_size, 'data': None}
+                    assert isinstance(self.__http_current_rqueue, queue.Queue)
+                    self.__http_current_rqueue.put({'cid': cid, 'http_status': http_status,
+                                                    'data_size': data_size})
                     if data_size > 0 and http_status == 200:  # Fetch Data
                         logging.info("Modem: Loading HTTP Data")
                         self.__http_fetch_data()
@@ -175,9 +174,8 @@ class ModemUnit:
                             dataline = self.__ser.readline().decode('utf-8')
                             logging.info("Modem: HTTP DATA: " + dataline)
                             self.__write_lock = False
-                            http_result = self.__http_result[self.__http_current_uuid]
-                            http_result['data'] = dataline
-                            self.__http_result[self.__http_current_uuid] = http_result
+                            self.__http_current_rqueue.put(dataline)
+                            self.__http_in_request = False
                             return
                         time.sleep(0.1)
                 elif self.__command_last == 'AT+GSN' and newline != 'AT+GSN' and self.__imei is None:
@@ -351,9 +349,8 @@ class ModemUnit:
 
         self.__http_in_request = True
         req = self.__http_queue.get()
-        self.__http_current_uuid = req['uuid']
+        self.__http_current_rqueue = req['rqueue']
         self.__http_current_request = req
-        self.__http_request_cache[req['uuid']] = req
 
         self.modem_execute("AT+HTTPTERM")
         self.modem_execute("AT+HTTPINIT")
@@ -383,24 +380,21 @@ class ModemUnit:
             self.network_stop()
             self.network_start()
 
-        new_uuid = uuid.uuid4()
-        self.__http_result[new_uuid] = None
-        self.__http_queue.put({'url': url, 'method': method, 'uuid': new_uuid})
-        while True:  # Wait for Response
-            if self.__http_result[new_uuid] is not None:
-                if (self.__http_result[new_uuid]['data_size'] != 0 and self.__http_result[new_uuid]['data'] is not None) or self.__http_result[new_uuid]['data_size'] == 0:
-                    res = self.__http_result[new_uuid]
+        rqueue = queue.Queue()
+        self.__http_queue.put({'url': url, 'method': method, 'rqueue': rqueue})
 
-                    # Clear Cache
-                    self.__http_result.pop(new_uuid)
-                    self.__http_request_cache.pop(new_uuid)
+        res = rqueue.get() # Wait for result
 
-                    # Check Result Code
-                    if res['http_code'] >= 600:
-                        self.__http_fail_count += 1
+        # Check Result Code
+        if res['http_status'] >= 600:
+            self.__http_fail_count += 1
 
-                    return res
-            time.sleep(0.1)
+        if res['data_size'] > 0:
+            data = rqueue.get() # Wait for data
+            res['data'] = data
+
+        return res
+
 
     def http_get(self, url) -> dict:
         """
