@@ -20,10 +20,12 @@ class TestSystem(unittest.TestCase):
     def test_http_get(self):
         res = self.m.http_get("http://httpstat.us/200")
         self.assertEqual(res['http_status'], 200)
+        print("Done!")
 
     def test_http_post(self):
         res = self.m.http_post("http://httpstat.us/200")
         self.assertEqual(res['http_status'], 200)
+        print("Done!")
 
 
 if __name__ == '__main__':

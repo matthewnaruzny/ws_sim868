@@ -10,8 +10,12 @@ if __name__ == "__main__":
     m = ModemUnit()
     m.apn_config('super', '', '')
     m.network_start()
-    res = m.http_get("http://example.com")
+    res = m.http_get("http://httpstat.us/200")
+    print("DONE 1")
     print(res)
+    res2 = m.http_post("http://httpstat.us/200")
+    print("DONE 2")
+    print(res2)
 
     while True:
         time.sleep(0.5)
