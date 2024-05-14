@@ -9,6 +9,8 @@ from ws_sim868.modemUnit import ModemUnit
 
 class TestSystem(unittest.TestCase):
 
+    m = None
+
     @classmethod
     def setUpClass(cls):
 
