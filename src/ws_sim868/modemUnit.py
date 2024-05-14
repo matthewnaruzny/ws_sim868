@@ -80,7 +80,7 @@ class GPSData:
 
 
 class ModemUnit:
-    def __init__(self, port='/dev/ttyS0', baudrate=115200, log=True):
+    def __init__(self, port='/dev/ttyS0', baudrate=115200, log=True, http_reinit=3):
 
         # Logging
         if log:
@@ -89,6 +89,7 @@ class ModemUnit:
         # Serial Config
         self.__serial_port = port
         self.__serial_baudrate = baudrate
+        self.connect()
 
         # Serial
         self.__ser = serial.Serial(port, baudrate=baudrate)
@@ -113,16 +114,17 @@ class ModemUnit:
 
         # HTTP
         self.__http_queue = queue.Queue()
-        self.__http_result = {}
         self.__http_in_request = False
-        self.__http_current_uuid = ""
+        self.__http_current_rqueue = None
         self.__http_current_request = None
-        self.__http_request_cache = {}
+        self.__http_fail_count = 0
+        self.__http_fail_max = http_reinit
 
         # Init Commands
         self.modem_execute("AT+GSN")
 
         # Worker Thread
+        self.__worker_working = True
         self.__mthread = None
         self.__start_worker()
 
@@ -156,8 +158,9 @@ class ModemUnit:
                     cid = int(reply[0])
                     http_status = int(reply[1])
                     data_size = int(reply[2])
-                    self.__http_result[self.__http_current_uuid] = {'cid': cid, 'http_status': http_status,
-                                                                    'data_size': data_size, 'data': None}
+                    assert isinstance(self.__http_current_rqueue, queue.Queue)
+                    self.__http_current_rqueue.put({'cid': cid, 'http_status': http_status,
+                                                    'data_size': data_size})
                     if data_size > 0 and http_status == 200:  # Fetch Data
                         logging.info("Modem: Loading HTTP Data")
                         self.__http_fetch_data()
@@ -171,9 +174,8 @@ class ModemUnit:
                             dataline = self.__ser.readline().decode('utf-8')
                             logging.info("Modem: HTTP DATA: " + dataline)
                             self.__write_lock = False
-                            http_result = self.__http_result[self.__http_current_uuid]
-                            http_result['data'] = dataline
-                            self.__http_result[self.__http_current_uuid] = http_result
+                            self.__http_current_rqueue.put(dataline)
+                            self.__http_in_request = False
                             return
                         time.sleep(0.1)
                 elif self.__command_last == 'AT+GSN' and newline != 'AT+GSN' and self.__imei is None:
@@ -204,10 +206,27 @@ class ModemUnit:
         if time.time() - self.__last_health > 30 and time.time() - self.__command_last_time > 30:
             if self.__write_lock:  # If waiting for reply and waiting over 30 seconds
                 self.power_toggle()
-            elif not self.__write_lock and not self.__command_queue.empty():
+            elif self.__command_queue.empty():
                 self.modem_execute("AT")
 
     def __reinit(self):
+        self.__write_lock = False
+        with self.__command_queue.mutex: # Clear Command Queue
+            self.__command_queue.queue.clear()
+
+        if self.__http_in_request: # Re-queue in-progress HTTP request
+            self.__http_in_request = False
+            self.__http_current_uuid = ""
+            self.__http_queue.put(self.__http_current_request)
+            self.__http_current_request = None
+
+        # Disconnect and Reconnect Serial
+        self.__ser.close()
+        time.sleep(5)
+        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
+
+        time.sleep(5)
+
         if self.__network_active and self.__apn_config is not None: # Network
             self.__network_active = False
             self.network_start()
@@ -218,6 +237,16 @@ class ModemUnit:
         if self.__imei is None:
             self.modem_execute("AT+GSN")
 
+    def connect(self):
+        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
+        self.__write_lock = False
+
+    def disconnect(self):
+        """
+        Close serial connection to Modem.
+        """
+        self.__write_lock = True
+        self.__ser.close()
 
     def power_toggle(self) -> None:
         """
@@ -236,22 +265,6 @@ class ModemUnit:
             GPIO.output(7, GPIO.HIGH)
             break
         GPIO.cleanup()
-
-        # Reset
-        self.__write_lock = False
-        with self.__command_queue.mutex:
-            self.__command_queue.queue.clear()
-
-        if self.__http_in_request:
-            self.__http_in_request = False
-            self.__http_current_uuid = ""
-            self.__http_queue.put(self.__http_current_request)
-            self.__http_current_request = None
-
-        # Disconnect and Reconnect Serial
-        self.__ser.close()
-        time.sleep(5)
-        self.__ser = serial.Serial(self.__serial_port, baudrate=self.__serial_baudrate)
 
         time.sleep(5)
         self.__reinit()
@@ -336,9 +349,8 @@ class ModemUnit:
 
         self.__http_in_request = True
         req = self.__http_queue.get()
-        self.__http_current_uuid = req['uuid']
+        self.__http_current_rqueue = req['rqueue']
         self.__http_current_request = req
-        self.__http_request_cache[req['uuid']] = req
 
         self.modem_execute("AT+HTTPTERM")
         self.modem_execute("AT+HTTPINIT")
@@ -360,22 +372,29 @@ class ModemUnit:
         :param url: URL to request.
         :return: Dict containing response code, data size, and data.
         """
-        if self.__network_active is False and self.__apn_config is not None:
+        if self.__network_active is False and self.__apn_config is not None: # Start if not active
             self.network_start()
-        new_uuid = uuid.uuid4()
-        self.__http_result[new_uuid] = None
-        self.__http_queue.put({'url': url, 'method': method, 'uuid': new_uuid})
-        while True:  # Wait for Response
-            if self.__http_result[new_uuid] is not None:
-                if (self.__http_result[new_uuid]['data_size'] != 0 and self.__http_result[new_uuid]['data'] is not None) or self.__http_result[new_uuid]['data_size'] == 0:
-                    res = self.__http_result[new_uuid]
 
-                    # Clear Cache
-                    self.__http_result.pop(new_uuid)
-                    self.__http_request_cache.pop(new_uuid)
+        if self.__http_fail_count >= self.__http_fail_max != 0: # Retry if too many fails
+            logging.warning("Too many failed attempts. Restarting Network.")
+            self.network_stop()
+            self.network_start()
 
-                    return res
-            time.sleep(0.1)
+        rqueue = queue.Queue()
+        self.__http_queue.put({'url': url, 'method': method, 'rqueue': rqueue})
+
+        res = rqueue.get() # Wait for result
+
+        # Check Result Code
+        if res['http_status'] >= 600:
+            self.__http_fail_count += 1
+
+        if res['data_size'] > 0:
+            data = rqueue.get() # Wait for data
+            res['data'] = data
+
+        return res
+
 
     def http_get(self, url) -> dict:
         """
