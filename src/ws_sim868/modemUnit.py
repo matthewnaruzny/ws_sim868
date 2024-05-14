@@ -206,7 +206,7 @@ class ModemUnit:
         if time.time() - self.__last_health > 30 and time.time() - self.__command_last_time > 30:
             if self.__write_lock:  # If waiting for reply and waiting over 30 seconds
                 self.power_toggle()
-            elif not self.__write_lock and not self.__command_queue.empty():
+            elif self.__command_queue.empty():
                 self.modem_execute("AT")
 
     def __reinit(self):
