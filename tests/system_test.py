@@ -9,12 +9,13 @@ from ws_sim868.modemUnit import ModemUnit
 
 class TestSystem(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
 
         # Start Modem
-        self.m = ModemUnit()
-        self.m.apn_config('super', '', '')
-        self.m.network_start()
+        cls.m = ModemUnit()
+        cls.m.apn_config('super', '', '')
+        cls.m.network_start()
 
 
     def test_http_get(self):
