@@ -12,6 +12,8 @@ import RPi.GPIO as GPIO
 
 class GPSData:
     def __init__(self, cgnsinf=None):
+        self._logger = logging.getLogger(__name__)
+
         self.cgnsinf = ""
         self.run_status = 0
         self.fix_status = 0
@@ -71,8 +73,7 @@ class GPSData:
                 if data[19] != '':
                     self.vpa = float(data[19])
             except (IndexError, ValueError):
-                logging.error("Malformed GPS Data")
-                logging.error(traceback.format_exc())
+                self._logger.exception("Malformed GPS Data")
     def __str__(self):
         return self.cgnsinf
 
@@ -80,11 +81,10 @@ class GPSData:
 
 
 class ModemUnit:
-    def __init__(self, port='/dev/ttyS0', baudrate=115200, log=True, http_reinit=3):
+    def __init__(self, port='/dev/ttyS0', baudrate=115200, http_reinit=3):
 
-        # Logging
-        if log:
-            logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        # self._logger
+        self._logger = self._logger.getLogger(__name__)
 
         # Serial Config
         self.__serial_port = port
@@ -133,7 +133,7 @@ class ModemUnit:
         if self.__ser.in_waiting > 0:
             while self.__ser.in_waiting:
                 newline = self.__ser.readline().decode('utf-8')
-                logging.info("Modem: Received: " + newline)
+                self._logger.debug("Modem: Received: " + newline)
                 newline = newline.rstrip('\r').rstrip('\n').rstrip('\r')
 
                 if "OK" in newline:
@@ -146,9 +146,9 @@ class ModemUnit:
                     self.__gnss_pwr = ('1' in pwr)
                     self.__write_lock = False
                     if self.__gnss_pwr:
-                        logging.info("Modem: GNSS Active")
+                        self._logger.info("Modem: GNSS Active")
                     else:
-                        logging.info("Modem: GNSS Inactive")
+                        self._logger.info("Modem: GNSS Inactive")
                 elif newline.startswith("+UGNSINF"):  # GPS Update
                     data = newline.split(':')[1][1:]
                     self.__gnss_loc = GPSData(data)
@@ -162,7 +162,7 @@ class ModemUnit:
                     self.__http_current_rqueue.put({'cid': cid, 'http_status': http_status,
                                                     'data_size': data_size})
                     if data_size > 0 and http_status == 200:  # Fetch Data
-                        logging.info("Modem: Loading HTTP Data")
+                        self._logger.debug("Modem: Loading HTTP Data")
                         self.__http_fetch_data()
                     else:
                         self.__http_in_request = False
@@ -172,7 +172,7 @@ class ModemUnit:
                     while True:
                         if self.__ser.in_waiting > 0:
                             dataline = self.__ser.readline().decode('utf-8')
-                            logging.info("Modem: HTTP DATA: " + dataline)
+                            self._logger.debug("Modem: HTTP DATA: " + dataline)
                             self.__write_lock = False
                             self.__http_current_rqueue.put(dataline)
                             self.__http_in_request = False
@@ -188,7 +188,7 @@ class ModemUnit:
             self.__write_lock = True
 
             self.__ser.write((cmd + '\n').encode('utf-8'))
-            logging.info("Modem: Writing: " + cmd)
+            self._logger.debug("Modem: Writing: " + cmd)
 
             self.__command_last = cmd
             self.__command_last_time = time.time()
@@ -252,7 +252,7 @@ class ModemUnit:
         """
         Toggle power of Modem
         """
-        logging.critical("Sys: Toggling Modem Power")
+        self._logger.warning("Sys: Toggling Modem Power")
         self.__last_health = time.time()
         self.__command_last_time = time.time()
 
@@ -376,7 +376,7 @@ class ModemUnit:
             self.network_start()
 
         if self.__http_fail_count >= self.__http_fail_max != 0: # Retry if too many fails
-            logging.warning("Too many failed attempts. Restarting Network.")
+            self._logger.warning("Too many failed attempts. Restarting Network.")
             self.network_stop()
             self.network_start()
 
