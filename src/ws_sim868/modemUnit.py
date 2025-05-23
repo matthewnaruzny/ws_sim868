@@ -1,4 +1,4 @@
-#  Copyright (c) 2023-2024. Matthew Naruzny.
+#  Copyright (c) 2023-2025. Matthew Naruzny.
 
 import threading
 import time
@@ -77,14 +77,11 @@ class GPSData:
     def __str__(self):
         return self.cgnsinf
 
-
-
-
 class ModemUnit:
     def __init__(self, port='/dev/ttyS0', baudrate=115200, http_reinit=3):
 
         # self._logger
-        self._logger = self._logger.getLogger(__name__)
+        self._logger = logging.getLogger(__name__)
 
         # Serial Config
         self.__serial_port = port
